@@ -9,10 +9,13 @@ import { extractText } from "@/lib/extract";
 import type { EvaluationResult } from "@/lib/types";
 
 // Main page — the complete flow: Upload → Extract → Evaluate → View Results
+// Stretch feature: optionally paste a job description for tailored feedback
 
 export default function Home() {
   // Extracted resume text
   const [resumeText, setResumeText] = useState<string | null>(null);
+  // Optional job description for tailored evaluation (stretch feature)
+  const [jobDescription, setJobDescription] = useState("");
   // Evaluation result from Gemini
   const [result, setResult] = useState<EvaluationResult | null>(null);
   // Loading states
@@ -54,10 +57,18 @@ export default function Home() {
     setError(null);
 
     try {
+      // Include job description if provided (stretch feature)
+      const payload: { resumeText: string; jobDescription?: string } = {
+        resumeText,
+      };
+      if (jobDescription.trim()) {
+        payload.jobDescription = jobDescription.trim();
+      }
+
       const response = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeText }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -83,6 +94,7 @@ export default function Home() {
     setResumeText(null);
     setResult(null);
     setError(null);
+    setJobDescription("");
   }
 
   return (
@@ -111,6 +123,27 @@ export default function Home() {
 
           {/* Show extracted text */}
           {resumeText && <TextPreview text={resumeText} />}
+
+          {/* Job description textarea (stretch feature) — shown after text extraction */}
+          {resumeText && (
+            <div className="w-full max-w-2xl animate-fade-in">
+              <label
+                htmlFor="job-description"
+                className="block text-sm font-medium text-slate-400 mb-2"
+              >
+                Paste a job description{" "}
+                <span className="text-slate-600">(optional)</span>
+              </label>
+              <textarea
+                id="job-description"
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                placeholder="Paste the job description here to get tailored feedback for a specific role..."
+                rows={4}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-sm text-slate-300 placeholder-slate-600 resize-none focus:outline-none focus:border-sky-500/50 transition-colors"
+              />
+            </div>
+          )}
 
           {/* Evaluate button — appears after text extraction */}
           {resumeText && (
@@ -143,6 +176,43 @@ export default function Home() {
         <>
           <ResultsCard result={result} />
           <StrengthsWeaknesses result={result} />
+
+          {/* Role fit section — only shown when a job description was provided */}
+          {result.role_fit_score !== undefined && result.tailored_suggestions && (
+            <div className="w-full max-w-2xl animate-slide-up" style={{ animationDelay: "0.4s" }}>
+              <div className="bg-slate-800/50 border border-violet-500/20 rounded-xl p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <h3 className="text-sm font-semibold text-violet-400">
+                    Role Fit
+                  </h3>
+                  <span
+                    className={`text-lg font-bold ${
+                      result.role_fit_score >= 70
+                        ? "text-emerald-400"
+                        : result.role_fit_score >= 50
+                          ? "text-amber-400"
+                          : "text-red-400"
+                    }`}
+                  >
+                    {result.role_fit_score}/100
+                  </span>
+                </div>
+                <ul className="space-y-2">
+                  {result.tailored_suggestions.map((suggestion, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2 text-sm text-slate-300"
+                    >
+                      <svg className="w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span>{suggestion}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Try another resume button */}
           <button

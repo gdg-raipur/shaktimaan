@@ -1,22 +1,26 @@
 /**
  * POST /api/evaluate
  *
- * This API route receives resume text from the frontend, sends it to the
- * Gemini API for evaluation, and returns structured feedback.
+ * This API route receives resume text (and optionally a job description) from
+ * the frontend, sends it to the Gemini API for evaluation, and returns
+ * structured feedback.
  *
  * This runs on the server (Next.js API Route), so the API key stays secret!
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { SYSTEM_PROMPT } from "@/lib/prompt";
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_WITH_JD } from "@/lib/prompt";
 import type { EvaluationResult } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
     // 1. Parse the request body
     const body = await request.json();
-    const { resumeText } = body as { resumeText: string };
+    const { resumeText, jobDescription } = body as {
+      resumeText: string;
+      jobDescription?: string;
+    };
 
     // 2. Validate input — make sure we got actual resume text
     if (!resumeText || typeof resumeText !== "string") {
@@ -46,19 +50,31 @@ export async function POST(request: NextRequest) {
     // 4. Initialize the Gemini client
     const ai = new GoogleGenAI({ apiKey });
 
-    console.log("🤖 Sending resume to Gemini for evaluation...");
+    // 5. Pick the right prompt — use the JD-aware version if a job description is provided
+    const hasJD = jobDescription && jobDescription.trim().length > 0;
+    const systemPrompt = hasJD ? SYSTEM_PROMPT_WITH_JD : SYSTEM_PROMPT;
 
-    // 5. Call the Gemini API with our system prompt and the resume text
+    // 6. Build the user message
+    let userMessage = `Evaluate this resume:\n\n${resumeText}`;
+    if (hasJD) {
+      userMessage += `\n\n---\n\nEvaluate this resume for the following role:\n\n${jobDescription}`;
+    }
+
+    console.log(
+      `🤖 Sending resume to Gemini for evaluation${hasJD ? " (with job description)" : ""}...`
+    );
+
+    // 7. Call the Gemini API with our system prompt and the resume text
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       config: {
-        systemInstruction: SYSTEM_PROMPT,
+        systemInstruction: systemPrompt,
         responseMimeType: "application/json",
       },
-      contents: `Evaluate this resume:\n\n${resumeText}`,
+      contents: userMessage,
     });
 
-    // 6. Extract the text from the response
+    // 8. Extract the text from the response
     const responseText = response.text;
     if (!responseText) {
       throw new Error("Gemini returned an empty response.");
@@ -66,10 +82,10 @@ export async function POST(request: NextRequest) {
 
     console.log("🤖 Received response from Gemini");
 
-    // 7. Parse the JSON response
+    // 9. Parse the JSON response
     const result: EvaluationResult = JSON.parse(responseText);
 
-    // 8. Basic validation — make sure the response has the expected shape
+    // 10. Basic validation — make sure the response has the expected shape
     if (
       typeof result.overall_score !== "number" ||
       !result.summary ||
@@ -80,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ Evaluation complete! Score:", result.overall_score);
 
-    // 9. Return the evaluation result to the frontend
+    // 11. Return the evaluation result to the frontend
     return NextResponse.json(result);
   } catch (error) {
     console.error("❌ Evaluation failed:", error);
