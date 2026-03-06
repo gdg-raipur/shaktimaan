@@ -1,10 +1,19 @@
 "use client";
 
+import UploadZone from "@/components/UploadZone";
+
 // This is the main page of the AI Resume Judge app.
-// Right now it just shows the landing page with a placeholder upload zone.
-// We'll build this out step by step in the upcoming checkpoints!
+// In this checkpoint we've added the UploadZone component.
+// The onFileSelect callback just logs the file for now — we'll extract text next!
 
 export default function Home() {
+  // Called when the user selects a valid file
+  function handleFileSelect(file: File) {
+    console.log("✅ File received in page:", file.name);
+    // TODO (checkpoint-2): Extract text from the file
+    // TODO (checkpoint-3): Send text to the Gemini API for evaluation
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       {/* Header section */}
@@ -17,13 +26,8 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Placeholder for the upload zone — we'll replace this in checkpoint-1 */}
-      <div className="w-full max-w-2xl border-2 border-dashed border-slate-700 rounded-xl p-12 text-center">
-        <p className="text-slate-500 text-lg">Coming soon...</p>
-        <p className="text-slate-600 text-sm mt-2">
-          The upload zone will appear here in the next checkpoint.
-        </p>
-      </div>
+      {/* Upload zone — handles drag & drop and file selection */}
+      <UploadZone onFileSelect={handleFileSelect} />
     </main>
   );
 }
