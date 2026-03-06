@@ -1,23 +1,48 @@
 "use client";
 
+import { useState } from "react";
 import UploadZone from "@/components/UploadZone";
+import TextPreview from "@/components/TextPreview";
+import { extractText } from "@/lib/extract";
 
-// This is the main page of the AI Resume Judge app.
-// In this checkpoint we've added the UploadZone component.
-// The onFileSelect callback just logs the file for now — we'll extract text next!
+// Main page — handles the flow: Upload → Extract → (Evaluate comes in checkpoint-3)
 
 export default function Home() {
+  // Track the extracted text from the resume
+  const [resumeText, setResumeText] = useState<string | null>(null);
+  // Loading state while extracting text
+  const [isExtracting, setIsExtracting] = useState(false);
+  // Error state if extraction fails
+  const [error, setError] = useState<string | null>(null);
+
   // Called when the user selects a valid file
-  function handleFileSelect(file: File) {
+  async function handleFileSelect(file: File) {
     console.log("✅ File received in page:", file.name);
-    // TODO (checkpoint-2): Extract text from the file
-    // TODO (checkpoint-3): Send text to the Gemini API for evaluation
+
+    // Reset previous state
+    setResumeText(null);
+    setError(null);
+    setIsExtracting(true);
+
+    try {
+      // Extract text from the uploaded file (PDF or DOCX)
+      const text = await extractText(file);
+      console.log("✅ Text extracted successfully, length:", text.length);
+      setResumeText(text);
+    } catch (err) {
+      console.error("❌ Text extraction failed:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to extract text from file."
+      );
+    } finally {
+      setIsExtracting(false);
+    }
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
       {/* Header section */}
-      <div className="text-center mb-12">
+      <div className="text-center mb-4">
         <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
           AI Resume Judge
         </h1>
@@ -26,8 +51,21 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Upload zone — handles drag & drop and file selection */}
-      <UploadZone onFileSelect={handleFileSelect} />
+      {/* Upload zone — pass isLoading so it shows a spinner during extraction */}
+      <UploadZone onFileSelect={handleFileSelect} isLoading={isExtracting} />
+
+      {/* Error message */}
+      {error && (
+        <div className="w-full max-w-2xl bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center animate-fade-in">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* Show extracted text once available */}
+      {resumeText && <TextPreview text={resumeText} />}
+
+      {/* TODO (checkpoint-3): "Evaluate" button and API call */}
+      {/* TODO (checkpoint-4): Polished results display */}
     </main>
   );
 }
