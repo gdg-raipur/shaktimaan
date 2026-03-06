@@ -3,10 +3,12 @@
 import { useState } from "react";
 import UploadZone from "@/components/UploadZone";
 import TextPreview from "@/components/TextPreview";
+import ResultsCard from "@/components/ResultsCard";
+import StrengthsWeaknesses from "@/components/StrengthsWeaknesses";
 import { extractText } from "@/lib/extract";
 import type { EvaluationResult } from "@/lib/types";
 
-// Main page — handles the full flow: Upload → Extract → Evaluate → View Results
+// Main page — the complete flow: Upload → Extract → Evaluate → View Results
 
 export default function Home() {
   // Extracted resume text
@@ -52,7 +54,6 @@ export default function Home() {
     setError(null);
 
     try {
-      // POST the resume text to our API route
       const response = await fetch("/api/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,6 +78,13 @@ export default function Home() {
     }
   }
 
+  // Reset everything for a new evaluation
+  function handleReset() {
+    setResumeText(null);
+    setResult(null);
+    setError(null);
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center p-8 gap-8">
       {/* Header section */}
@@ -89,53 +97,61 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Upload zone */}
-      <UploadZone onFileSelect={handleFileSelect} isLoading={isExtracting} />
+      {/* Show upload zone only when there are no results yet */}
+      {!result && (
+        <>
+          <UploadZone onFileSelect={handleFileSelect} isLoading={isExtracting} />
 
-      {/* Error message */}
-      {error && (
-        <div className="w-full max-w-2xl bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center animate-fade-in">
-          <p className="text-red-400 text-sm">{error}</p>
-        </div>
-      )}
-
-      {/* Show extracted text */}
-      {resumeText && <TextPreview text={resumeText} />}
-
-      {/* Evaluate button — appears after text extraction, before results */}
-      {resumeText && !result && (
-        <button
-          onClick={handleEvaluate}
-          disabled={isEvaluating}
-          className={`
-            px-8 py-3 rounded-xl font-medium text-white transition-all duration-200
-            ${isEvaluating
-              ? "bg-slate-700 cursor-not-allowed"
-              : "bg-sky-500 hover:bg-sky-400 active:scale-95"
-            }
-          `}
-        >
-          {isEvaluating ? (
-            <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Analyzing your resume...
-            </span>
-          ) : (
-            "Evaluate with Gemini"
+          {/* Error message */}
+          {error && (
+            <div className="w-full max-w-2xl bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center animate-fade-in">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
           )}
-        </button>
+
+          {/* Show extracted text */}
+          {resumeText && <TextPreview text={resumeText} />}
+
+          {/* Evaluate button — appears after text extraction */}
+          {resumeText && (
+            <button
+              onClick={handleEvaluate}
+              disabled={isEvaluating}
+              className={`
+                px-8 py-3 rounded-xl font-medium text-white transition-all duration-200
+                ${isEvaluating
+                  ? "bg-slate-700 cursor-not-allowed"
+                  : "bg-sky-500 hover:bg-sky-400 active:scale-95"
+                }
+              `}
+            >
+              {isEvaluating ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Analyzing your resume...
+                </span>
+              ) : (
+                "Evaluate with Gemini"
+              )}
+            </button>
+          )}
+        </>
       )}
 
-      {/* Raw JSON results — we'll replace this with polished UI in checkpoint-4 */}
+      {/* Results — shown after successful evaluation */}
       {result && (
-        <div className="w-full max-w-2xl animate-fade-in">
-          <h3 className="text-sm font-medium text-slate-400 mb-3">
-            Evaluation Result (Score: {result.overall_score}/100)
-          </h3>
-          <pre className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-sm text-slate-300 overflow-x-auto">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
+        <>
+          <ResultsCard result={result} />
+          <StrengthsWeaknesses result={result} />
+
+          {/* Try another resume button */}
+          <button
+            onClick={handleReset}
+            className="px-6 py-2.5 rounded-xl font-medium text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white transition-all duration-200 mb-12"
+          >
+            Try another resume
+          </button>
+        </>
       )}
     </main>
   );
