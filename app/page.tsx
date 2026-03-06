@@ -4,28 +4,32 @@ import { useState } from "react";
 import UploadZone from "@/components/UploadZone";
 import TextPreview from "@/components/TextPreview";
 import { extractText } from "@/lib/extract";
+import type { EvaluationResult } from "@/lib/types";
 
-// Main page — handles the flow: Upload → Extract → (Evaluate comes in checkpoint-3)
+// Main page — handles the full flow: Upload → Extract → Evaluate → View Results
 
 export default function Home() {
-  // Track the extracted text from the resume
+  // Extracted resume text
   const [resumeText, setResumeText] = useState<string | null>(null);
-  // Loading state while extracting text
+  // Evaluation result from Gemini
+  const [result, setResult] = useState<EvaluationResult | null>(null);
+  // Loading states
   const [isExtracting, setIsExtracting] = useState(false);
-  // Error state if extraction fails
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  // Error state
   const [error, setError] = useState<string | null>(null);
 
-  // Called when the user selects a valid file
+  // Step 1: User selects a file → extract text
   async function handleFileSelect(file: File) {
     console.log("✅ File received in page:", file.name);
 
-    // Reset previous state
+    // Reset all state for a fresh evaluation
     setResumeText(null);
+    setResult(null);
     setError(null);
     setIsExtracting(true);
 
     try {
-      // Extract text from the uploaded file (PDF or DOCX)
       const text = await extractText(file);
       console.log("✅ Text extracted successfully, length:", text.length);
       setResumeText(text);
@@ -39,10 +43,44 @@ export default function Home() {
     }
   }
 
+  // Step 2: User clicks "Evaluate" → send text to Gemini API
+  async function handleEvaluate() {
+    if (!resumeText) return;
+
+    console.log("🚀 Starting evaluation...");
+    setIsEvaluating(true);
+    setError(null);
+
+    try {
+      // POST the resume text to our API route
+      const response = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeText }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Evaluation failed.");
+      }
+
+      console.log("✅ Evaluation complete!", data);
+      setResult(data as EvaluationResult);
+    } catch (err) {
+      console.error("❌ Evaluation failed:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to evaluate resume."
+      );
+    } finally {
+      setIsEvaluating(false);
+    }
+  }
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
+    <main className="min-h-screen flex flex-col items-center p-8 gap-8">
       {/* Header section */}
-      <div className="text-center mb-4">
+      <div className="text-center mt-12 mb-4">
         <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
           AI Resume Judge
         </h1>
@@ -51,7 +89,7 @@ export default function Home() {
         </p>
       </div>
 
-      {/* Upload zone — pass isLoading so it shows a spinner during extraction */}
+      {/* Upload zone */}
       <UploadZone onFileSelect={handleFileSelect} isLoading={isExtracting} />
 
       {/* Error message */}
@@ -61,11 +99,44 @@ export default function Home() {
         </div>
       )}
 
-      {/* Show extracted text once available */}
+      {/* Show extracted text */}
       {resumeText && <TextPreview text={resumeText} />}
 
-      {/* TODO (checkpoint-3): "Evaluate" button and API call */}
-      {/* TODO (checkpoint-4): Polished results display */}
+      {/* Evaluate button — appears after text extraction, before results */}
+      {resumeText && !result && (
+        <button
+          onClick={handleEvaluate}
+          disabled={isEvaluating}
+          className={`
+            px-8 py-3 rounded-xl font-medium text-white transition-all duration-200
+            ${isEvaluating
+              ? "bg-slate-700 cursor-not-allowed"
+              : "bg-sky-500 hover:bg-sky-400 active:scale-95"
+            }
+          `}
+        >
+          {isEvaluating ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Analyzing your resume...
+            </span>
+          ) : (
+            "Evaluate with Gemini"
+          )}
+        </button>
+      )}
+
+      {/* Raw JSON results — we'll replace this with polished UI in checkpoint-4 */}
+      {result && (
+        <div className="w-full max-w-2xl animate-fade-in">
+          <h3 className="text-sm font-medium text-slate-400 mb-3">
+            Evaluation Result (Score: {result.overall_score}/100)
+          </h3>
+          <pre className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-sm text-slate-300 overflow-x-auto">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      )}
     </main>
   );
 }
